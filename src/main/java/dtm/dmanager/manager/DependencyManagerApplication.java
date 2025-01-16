@@ -88,7 +88,7 @@ public class DependencyManagerApplication implements DependencyManager{
         for (Class<?> clazz : parents){
             Map<String, DependencyManagerStorage> node = dependencyMap.getOrDefault(clazz, new ConcurrentHashMap<>());
             DependencyManagerStorage dependencyStorage = node.getOrDefault(qualifier, new DependencyManagerStorage(DependencyCreatorType.SINGLETON, false, clazzBase, () -> null));
-            dependencyStorage.setActivationFunction(() -> getByCache(dependencyStorage));
+            dependencyStorage.setActivationFunction(() -> getByCache(dependencyStorage, dependency));
             node.put(qualifier, dependencyStorage);
             dependencyMap.put(clazz, node);
         }
@@ -226,6 +226,15 @@ public class DependencyManagerApplication implements DependencyManager{
         Class<?> clazz = managerStorage.getDependencyClass();
         if(!singletonCache.containsKey(clazz)){
             final Object instance = createDependencyObject(managerStorage);
+            singletonCache.put(clazz, instance);
+        }
+        return singletonCache.get(clazz);
+    }
+
+    private Object getByCache(DependencyManagerStorage managerStorage, Object val){
+        Class<?> clazz = managerStorage.getDependencyClass();
+        if(!singletonCache.containsKey(clazz)){
+            final Object instance = val;
             singletonCache.put(clazz, instance);
         }
         return singletonCache.get(clazz);
