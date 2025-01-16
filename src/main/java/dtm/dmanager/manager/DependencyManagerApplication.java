@@ -61,6 +61,7 @@ public class DependencyManagerApplication implements DependencyManager{
     @Override
     public void initialize(Class<?>... clazzs) {
         findServices();
+        autoInject();
         applicationDependencyClasses.addAll(Arrays.asList(clazzs));
         for (Class<?> clazz : applicationDependencyClasses) {
             addInDependecyMap(clazz);
@@ -80,7 +81,17 @@ public class DependencyManagerApplication implements DependencyManager{
 
     @Override
     public void addDependency(Object dependency, DependencyCreatorType strategy, String qualifier){
-        
+        qualifier = (qualifier == null || qualifier.isEmpty()) ? "default" : qualifier;
+        Class<?> clazzBase = dependency.getClass();
+        List<Class<?>> parents = getParentClassList(clazzBase);
+        singletonCache.put(clazzBase, dependency);
+        for (Class<?> clazz : parents){
+            Map<String, DependencyManagerStorage> node = dependencyMap.getOrDefault(clazz, new ConcurrentHashMap<>());
+            DependencyManagerStorage dependencyStorage = node.getOrDefault(qualifier, new DependencyManagerStorage(DependencyCreatorType.SINGLETON, false, clazzBase, () -> null));
+            dependencyStorage.setActivationFunction(() -> getByCache(dependencyStorage));
+            node.put(qualifier, dependencyStorage);
+            dependencyMap.put(clazz, node);
+        }
     }
 
     @Override
@@ -274,6 +285,17 @@ public class DependencyManagerApplication implements DependencyManager{
         }
 
         return Arrays.stream(all).sorted(Comparator.comparingInt(Constructor::getParameterCount)).findFirst().orElse(null);
+    }
+
+    private void autoInject(){
+        Map<String, DependencyManagerStorage> node = dependencyMap.getOrDefault(DependencyManager.class, new HashMap<>());
+        DependencyManagerStorage creatorManagerStorage = node.getOrDefault("default", new DependencyManagerStorage(DependencyCreatorType.SINGLETON, false, getClass(), () -> getThis()));
+        node.put("default", creatorManagerStorage);
+        dependencyMap.put(DependencyManager.class, node);
+    }
+
+    private DependencyManager getThis(){
+        return this;
     }
 
     public void showTeste(){
