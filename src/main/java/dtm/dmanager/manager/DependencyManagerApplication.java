@@ -297,6 +297,8 @@ public class DependencyManagerApplication implements DependencyManager{
     }
 
     private void autoInject(){
+        singletonCache.put(getClass(), getThis());
+        singletonCache.put(DependencyManager.class, getThis());
         Map<String, DependencyManagerStorage> node = dependencyMap.getOrDefault(DependencyManager.class, new HashMap<>());
         DependencyManagerStorage creatorManagerStorage = node.getOrDefault("default", new DependencyManagerStorage(DependencyCreatorType.SINGLETON, false, getClass(), () -> getThis()));
         node.put("default", creatorManagerStorage);
