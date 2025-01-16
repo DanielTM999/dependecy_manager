@@ -67,8 +67,30 @@ public class DependencyManagerApplication implements DependencyManager{
 
     @Override
     public void addDependency(Object dependency) {
-        // TODO Auto-generated method stub
-        throw new UnsupportedOperationException("Unimplemented method 'addDependency'");
+        addDependency(dependency, DependencyCreatorType.SINGLETON);
+    }
+
+    @Override
+    public void addDependency(Object dependency, DependencyCreatorType strategy){
+        addDependency(dependency, strategy, "default");
+    }
+
+    @Override
+    public void addDependency(Object dependency, DependencyCreatorType strategy, String qualifier){
+        qualifier = (qualifier == null || qualifier.isEmpty()) ? "default" : qualifier;
+        Class<?> clazzBase = dependency.getClass();
+        List<Class<?>> interfaces = getInterfaceByClass(clazzBase);
+        interfaces.add(0, clazzBase);
+
+        for (Class<?> clazz : interfaces) {
+            Map<String, DependencyManagerCreator> mapDependencyNode = dependencyMap.getOrDefault(clazz, new HashMap<>());
+            DependencyManagerCreator creatorManagerCreator = mapDependencyNode.getOrDefault(mapDependencyNode, new DependencyManagerCreator(strategy, true, clazz));
+            creatorManagerCreator.setCreatorAction((list) -> {
+                return dependency;
+            });
+            mapDependencyNode.put(qualifier, creatorManagerCreator);
+            dependencyMap.put(clazz, mapDependencyNode);
+        }
     }
 
     @Override
@@ -128,6 +150,11 @@ public class DependencyManagerApplication implements DependencyManager{
         };
     }
    
+    @Override
+    public List<String> getDependencyNameList() {
+        return dependencyMap.keySet().stream().map(c -> c.getName()).toList();
+    }
+
     private void findDependency(){
         if(applicationClasses.isEmpty()){
             applicationDependencyClasses.addAll(classFinder.find(new ClassFinderConfigurations(){

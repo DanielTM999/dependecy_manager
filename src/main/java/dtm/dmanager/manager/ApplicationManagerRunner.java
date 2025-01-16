@@ -72,6 +72,13 @@ public class ApplicationManagerRunner implements ApplicationManager{
         return getApplicationManager(null);
     }
 
+    public static void runApplication(){
+        ApplicationManagerRunner.getApplicationManager().run();
+    }
+
+    public static void runApplication(Class<?> mainClass){
+        ApplicationManagerRunner.getApplicationManager().run(mainClass);
+    }
 
     private Optional<Class<?>> getBootableClass(){
         return applicationClasses.parallelStream()
