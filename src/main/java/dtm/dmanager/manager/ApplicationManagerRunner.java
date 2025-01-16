@@ -138,7 +138,7 @@ public class ApplicationManagerRunner implements ApplicationManager{
 
             bootableMethod.invoke(bootableobject, args);
         } catch (Exception e) {
-           throw new ApplicationManagerInitializeException("Bootable method can not Execute: "+e.getMessage());
+           throw new ApplicationManagerInitializeException("Bootable method can not Execute: "+e.getMessage(), e);
         }
     }
 }

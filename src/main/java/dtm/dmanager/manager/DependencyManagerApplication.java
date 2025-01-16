@@ -6,6 +6,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -183,13 +184,17 @@ public class DependencyManagerApplication implements DependencyManager{
     }
 
     private List<Class<?>> getInterfaceByClass(Class<?> dependency){
-        List<Class<?>> interfaces = new ArrayList<>();
+        Set<Class<?>> interfaces = new HashSet<>();
 
-        for (Class<?> class1 : dependency.getInterfaces()) {
-            interfaces.add(class1);
+        interfaces.addAll(Arrays.asList(dependency.getInterfaces()));
+        Class<?> superClass = dependency.getSuperclass();
+        while (superClass != null && superClass != Object.class) {
+            interfaces.add(superClass);
+            interfaces.addAll(Arrays.asList(superClass.getInterfaces())); 
+            superClass = superClass.getSuperclass();
         }
 
-        return interfaces;
+        return new ArrayList<>(interfaces);
     }
 
     private boolean isInstantiable(Class<?> clazz) {
@@ -212,7 +217,7 @@ public class DependencyManagerApplication implements DependencyManager{
         
         try {     
             if (onlyConstructor) {
-                Constructor<?> constructor = dependencyClass.getConstructors()[0];
+                Constructor<?> constructor = getMinContructor(dependencyClass.getConstructors());
                 Class<?>[] parametersType = constructor.getParameterTypes();
 
                 for (Class<?> class1 : parametersType) {
@@ -225,7 +230,7 @@ public class DependencyManagerApplication implements DependencyManager{
                 }
 
             }else{
-                Constructor<?> constructor = dependencyClass.getConstructors()[0];
+                Constructor<?> constructor = getMinContructor(dependencyClass.getConstructors());
                 Class<?>[] parametersType = constructor.getParameterTypes();
                 List<Field> fields = Arrays.asList(dependencyClass.getDeclaredFields()).parallelStream().filter(f -> f.isAnnotationPresent(Inject.class)).toList();
 
@@ -251,7 +256,7 @@ public class DependencyManagerApplication implements DependencyManager{
 
             }
         } catch (Exception e) {
-            // TODO: handle exception
+           
         }
     }
 
@@ -288,7 +293,7 @@ public class DependencyManagerApplication implements DependencyManager{
     }
 
     private Object createDependencyObjectByContructor(Class<?> dependencyClass) throws InvocationTargetException, InstantiationException, IllegalAccessException, IllegalArgumentException{
-        Constructor<?> constructor = dependencyClass.getConstructors()[0];
+        Constructor<?> constructor = getMinContructor(dependencyClass.getConstructors());
         Class<?>[] parametersType = constructor.getParameterTypes();
         Object[] args = new Object[parametersType.length];
         
@@ -319,5 +324,13 @@ public class DependencyManagerApplication implements DependencyManager{
         });
         mapDependencyNode.put("default", creatorManagerCreator);
         dependencyMap.put(DependencyManager.class, mapDependencyNode);
+    }
+
+    private Constructor<?> getMinContructor(Constructor<?>[] all){
+        if(all == null){
+            return null;
+        }
+
+        return Arrays.stream(all).sorted(Comparator.comparingInt(Constructor::getParameterCount)).findFirst().orElse(null);
     }
 }
