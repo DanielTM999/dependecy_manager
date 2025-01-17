@@ -21,4 +21,6 @@ public interface DependencyManager {
     DependencyResultGet getDependency(Class<? extends Object> dependencyToCreate);
 
     List<String> getDependencyNameList();
+
+    <T> T doCreate(Class<? extends T> reference);
 }

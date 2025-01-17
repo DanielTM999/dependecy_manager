@@ -67,11 +67,12 @@ public class DependencyManagerApplication implements DependencyManager{
             addInDependecyMap(clazz);
         }
         defineActivatorFuntions();
+        initialized = true;
     }
 
     @Override
     public void addDependency(Object dependency) {
-        addDependency(dependency, DependencyCreatorType.SINGLETON);
+        addDependency(dependency, DependencyCreatorType.SINGLETON, "default");
     }
 
     @Override
@@ -84,6 +85,7 @@ public class DependencyManagerApplication implements DependencyManager{
         qualifier = (qualifier == null || qualifier.isEmpty()) ? "default" : qualifier;
         Class<?> clazzBase = dependency.getClass();
         List<Class<?>> parents = getParentClassList(clazzBase);
+        parents.add(0, clazzBase);
         singletonCache.put(clazzBase, dependency);
         for (Class<?> clazz : parents){
             Map<String, DependencyManagerStorage> node = dependencyMap.getOrDefault(clazz, new ConcurrentHashMap<>());
@@ -129,6 +131,16 @@ public class DependencyManagerApplication implements DependencyManager{
         return new DependencyResultGetStorage(dependency, dependencyToCreate);
     }
    
+    @Override
+    public <T> T doCreate(Class<? extends T> reference){
+        try {
+            Object value = createDependencyObjectByClass(reference);
+            return reference.cast(value);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     @Override
     public List<String> getDependencyNameList() {
         return dependencyMap.keySet().stream().map(c -> c.getName()).toList();
@@ -240,6 +252,32 @@ public class DependencyManagerApplication implements DependencyManager{
         return singletonCache.get(clazz);
     }
 
+    private Object createDependencyObjectByClass(Class<?> reference) throws Exception{
+        Object instance = createDependencyObjectByContructor(reference);
+        boolean containsFielInject = containsFielInject(reference);
+        if(containsFielInject){
+            List<Field> fields = Arrays.asList(reference.getDeclaredFields())
+            .stream()
+            .filter(f -> f.isAnnotationPresent(Inject.class))
+            .toList();
+
+            for (Field field : fields) {
+                Inject inject = field.getAnnotation(Inject.class);
+                Object value = null;
+                if(!field.canAccess(instance)){
+                    field.setAccessible(true);
+                } 
+                Class<?> fieldType = field.getType();
+                DependencyResultGet dependency = getDependency(fieldType, inject.qualifier());
+                if(dependency.exists()){
+                    value = dependency.getDependency();
+                }
+                field.set(instance, value);
+            }
+        }
+        return instance;
+    }
+
     private Object createDependencyObject(DependencyManagerStorage managerStorage){
         try {
             Class<?> dependencyClass = managerStorage.getDependencyClass();
@@ -309,7 +347,7 @@ public class DependencyManagerApplication implements DependencyManager{
         return this;
     }
 
-    public void showTeste(){
+    public void printConsole(){
         for (Map.Entry<Class<?>, Map<String, DependencyManagerStorage>> entry : dependencyMap.entrySet()) {
             System.out.println("Classe: " + entry.getKey().getName());
             for (Map.Entry<String, DependencyManagerStorage> innerEntry : entry.getValue().entrySet()) {

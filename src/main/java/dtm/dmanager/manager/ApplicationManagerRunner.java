@@ -1,7 +1,9 @@
 package dtm.dmanager.manager;
 
 import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
@@ -11,13 +13,15 @@ import java.util.Set;
 import dtm.discovery.core.ClassFinder;
 import dtm.discovery.finder.ClassFinderService;
 import dtm.dmanager.core.ApplicationManager;
+import dtm.dmanager.core.BeansManagerBuilder;
 import dtm.dmanager.core.DependencyManager;
 import dtm.dmanager.core.DependencyResultGet;
 import dtm.dmanager.core.annotations.Bootable;
+import dtm.dmanager.core.annotations.FactoryMethod;
+import dtm.dmanager.core.annotations.Setup;
 import dtm.dmanager.exceptions.ApplicationManagerInitializeException;
 import lombok.Getter;
 
-@SuppressWarnings("unused")
 public class ApplicationManagerRunner implements ApplicationManager{
     private static ApplicationManagerRunner applicationManager;
 
@@ -28,15 +32,18 @@ public class ApplicationManagerRunner implements ApplicationManager{
 
     private Set<Class<?>> applicationClasses; 
 
+    private BeansManagerBuilder beansManagerBuilder;
 
     private ApplicationManagerRunner(){
         this.classFinder = new ClassFinderService();
         applicationClasses = new HashSet<>();
+        beansManagerBuilder = new ApplicationBeansManagerBuilder(new ArrayList<>());
     }
 
     private ApplicationManagerRunner(ClassFinder classFinder){
         this.classFinder = classFinder;
         applicationClasses = new HashSet<>();
+        beansManagerBuilder = new ApplicationBeansManagerBuilder(new ArrayList<>());
     }
 
     @Override
@@ -49,12 +56,20 @@ public class ApplicationManagerRunner implements ApplicationManager{
         populateApplicationClasses(mainClass);
         Class<?> bootableClass = getBootableClass().orElseThrow(() -> new ApplicationManagerInitializeException("Bootable class not found"));
         Method bootableMethod = getBootableMethod(bootableClass).orElseThrow(() -> new ApplicationManagerInitializeException("Bootable method not found"));
+        
         createDependencyManager();
+        List<Object> beans = getInjectableBeans();
+        injectBean(beans);
         dependencyManager.initialize(bootableClass);
         DependencyResultGet dependencyResultGet = dependencyManager.getDependency(bootableClass);
         canExecute(dependencyResultGet);
         Object intanceRunner = dependencyResultGet.getDependency();
         executeMethod(intanceRunner, bootableMethod);
+    }
+
+    @Override
+    public BeansManagerBuilder getBeansManagerBuilder(){
+        return beansManagerBuilder;
     }
 
     public static ApplicationManager getApplicationManager(ClassFinder classFinder){
@@ -105,10 +120,16 @@ public class ApplicationManagerRunner implements ApplicationManager{
         
     }
 
-    private void createDependencyManager(){
-        if(dependencyManager == null){
-            dependencyManager = new DependencyManagerApplication(this.classFinder, applicationClasses);
+    private List<Method> getFactoryMethod(Class<?>  setupClass){
+        try {
+            return Arrays.stream(setupClass.getMethods()).filter(m -> m.isAnnotationPresent(FactoryMethod.class) && m.getParameterCount() == 0).toList();
+        }catch (Exception e) {
+            return Collections.emptyList();
         }
+    }
+
+    private void createDependencyManager(){
+        dependencyManager = new DependencyManagerApplication(this.classFinder, applicationClasses);
     }
 
     private void populateApplicationClasses(Class<?> mainClass){
@@ -146,6 +167,43 @@ public class ApplicationManagerRunner implements ApplicationManager{
             bootableMethod.invoke(bootableobject, args);
         } catch (Exception e) {
            throw new ApplicationManagerInitializeException("Bootable method can not Execute: "+e.getMessage(), e);
+        }
+    }
+
+    private List<Object> getInjectableBeans(){
+        BeansManagerBuilder beansManagerBuilder = getBeansManagerBuilder();
+        List<Object> beans = new ArrayList<>();
+        List<Class<?>> setupClassList = applicationClasses.parallelStream().filter(c -> c.isAnnotationPresent(Setup.class)).toList();
+        for (Class<?> setupClass : setupClassList) {
+            Object instance = dependencyManager.doCreate(setupClass);
+            List<Method> methodsFactories = getFactoryMethod(setupClass);
+
+            for (Method method : methodsFactories) {
+                try {
+                    if (!method.canAccess(instance)) {
+                        method.setAccessible(true);
+                    }
+    
+                    Object result = method.invoke(instance);
+    
+
+                    if (result != null) {
+                        beans.add(result);
+                    }
+    
+                } catch (Exception e) {
+                    
+                }
+            }
+        }
+
+        beans.addAll(beansManagerBuilder.getBeans().parallelStream().map(b -> b.getBean()).toList());
+        return beans;
+    }
+
+    private void injectBean(List<Object> beans){
+        for (Object object : beans) {
+            dependencyManager.addDependency(object);
         }
     }
 }
