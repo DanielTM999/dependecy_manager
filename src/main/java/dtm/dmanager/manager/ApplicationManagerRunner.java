@@ -205,5 +205,6 @@ public class ApplicationManagerRunner implements ApplicationManager{
         for (Object object : beans) {
             dependencyManager.addDependency(object);
         }
+        dependencyManager.addDependency(classFinder);
     }
 }

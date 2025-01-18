@@ -315,7 +315,12 @@ public class DependencyManagerApplication implements DependencyManager{
         if(constructor.getParameterCount() > 0){
             for(int i = 0; i < parametersType.length; i++){
                 Class<?> class1 = parametersType[i];
-                DependencyResultGet dependencyResultGet = getDependency(class1);
+                String qualifier = "default";
+                if(class1.isAnnotationPresent(Inject.class)){
+                    Inject inject = class1.getAnnotation(Inject.class);
+                    qualifier = inject.qualifier();
+                }
+                DependencyResultGet dependencyResultGet = getDependency(class1, qualifier);
                 if(dependencyResultGet.exists()){
                     args[i] = dependencyResultGet.getDependency();
                 }else{
